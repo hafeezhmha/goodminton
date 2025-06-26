@@ -1,7 +1,8 @@
 Flask
-requests
-pytz
-rich
-python-dateutil
 python-telegram-bot
-groq 
+python-dotenv
+pytz
+python-dateutil
+groq
+requests
+vercel-blob

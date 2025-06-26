@@ -11,26 +11,43 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton
 from dateutil import parser
 from math import sin, cos, sqrt, atan2, radians
 from groq import Groq
+import vercel_blob
 
 app = Flask(__name__)
 
-# --- Location Storage ---
-LOCATIONS_FILE = 'user_locations.json'
+# --- Location Storage (Now using Vercel Blob) ---
+BLOB_FILENAME = 'user_locations.json'
 
 def get_user_locations():
-    """Reads all user locations from the file."""
+    """Reads all user locations from the Vercel Blob."""
     try:
-        with open(LOCATIONS_FILE, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        all_blobs = vercel_blob.list().get('blobs', [])
+        user_locations_blob = next((b for b in all_blobs if b.get('pathname') == BLOB_FILENAME), None)
+        
+        if user_locations_blob:
+            response = requests.get(user_locations_blob['url'])
+            response.raise_for_status()
+            return response.json()
+        else:
+            app.logger.info(f"'{BLOB_FILENAME}' not found in blob storage. Returning empty dict.")
+            return {}
+    except (requests.RequestException, json.JSONDecodeError) as e:
+        app.logger.error(f"Error fetching or parsing user locations from blob: {e}")
+        return {}
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred with Vercel Blob storage: {e}")
         return {}
 
 def save_user_location(chat_id, lat, lng):
-    """Saves a single user's location."""
+    """Saves a single user's location to the Vercel Blob."""
     locations = get_user_locations()
     locations[str(chat_id)] = {"lat": lat, "lng": lng}
-    with open(LOCATIONS_FILE, 'w') as f:
-        json.dump(locations, f, indent=4)
+    try:
+        file_content_bytes = json.dumps(locations, indent=4).encode('utf-8')
+        vercel_blob.put(BLOB_FILENAME, file_content_bytes)
+        app.logger.info(f"Successfully saved user locations to blob for chat_id {chat_id}")
+    except Exception as e:
+        app.logger.error(f"Failed to save user locations to blob: {e}")
 
 def get_user_location(chat_id):
     """Retrieves a single user's location."""
@@ -117,7 +134,8 @@ def load_metro_stations():
         # Assumes metro_stations.json is in the root directory
         with open('metro_stations.json', 'r') as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        app.logger.error(f"Error loading metro_stations.json: {e}")
         return []
 
 def calculate_haversine_distance(lat1, lon1, lat2, lon2):
