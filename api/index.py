@@ -37,6 +37,34 @@ def get_user_location(chat_id):
     locations = get_user_locations()
     return locations.get(str(chat_id))
 
+def get_address_from_coords(lat, lng):
+    """Converts coordinates to a human-readable address using OpenStreetMap."""
+    try:
+        headers = {"User-Agent": "GoodmintonTelegramBot/1.0"}
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}"
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract a user-friendly address string, preferring more specific parts
+        address = data.get('address', {})
+        parts = [
+            address.get('suburb'),
+            address.get('city_district'),
+            address.get('city'),
+            address.get('state'),
+            address.get('country')
+        ]
+        # Filter out None values and join the first 2-3 parts for a concise name
+        display_address = ", ".join(filter(None, parts[:2]))
+        if not display_address:
+             display_address = data.get('display_name')
+
+        return display_address
+    except Exception as e:
+        app.logger.error(f"Reverse geocoding failed: {e}")
+        return None
+
 # --- Groq LLM Parsing Logic ---
 def parse_query_with_groq(query_text):
     """
@@ -242,9 +270,18 @@ def telegram_webhook():
 
         # Handle incoming location messages
         if location:
-            save_user_location(chat_id, location.latitude, location.longitude)
+            lat, lng = location.latitude, location.longitude
+            save_user_location(chat_id, lat, lng)
+            
+            # Get address for confirmation message
+            address = get_address_from_coords(lat, lng)
+            if address:
+                reply_text = f"✅ Your location has been updated to: *{address}*"
+            else:
+                reply_text = "✅ Your location has been saved!"
+
             async def _send_confirmation():
-                await bot.send_message(chat_id=chat_id, text="✅ Your location has been saved!")
+                await bot.send_message(chat_id=chat_id, text=reply_text, parse_mode=ParseMode.MARKDOWN)
             asyncio.run(_send_confirmation())
             return 'ok'
 
