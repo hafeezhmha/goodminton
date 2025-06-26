@@ -1,11 +1,18 @@
 # Goodminton 🏸
 
+<p align="center">
+  <img src="assets/bot-logo.jpeg" alt="Goodminton Bot Logo" width="200"/>
+</p>
+
 **Goodminton** is an intelligent, AI-powered Telegram bot that helps you find and book badminton courts on the [Playo](https://playo.co/) app. 
 
 Powered by [Groq](https://groq.com/) for natural language understanding, you can chat with it conversationally to find courts on specific dates and times. The bot prioritizes venues near Bangalore's Namma Metro stations, making it the perfect tool for planning your next game.
 
-![Goodminton Bot Demo](assets/demo.jpeg)
+## Demo
 
+<p align="center">
+  <img src="assets/demo.jpeg" alt="Goodminton Bot Demo" width="300"/>
+</p>
 
 ## Features
 
