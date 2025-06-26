@@ -4,7 +4,6 @@ import datetime
 import pytz
 import requests
 import asyncio
-import logging
 from flask import Flask, request
 from telegram import Bot, Update
 from telegram.constants import ParseMode
@@ -13,9 +12,6 @@ from math import sin, cos, sqrt, atan2, radians
 from groq import Groq
 
 app = Flask(__name__)
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 
 # --- Groq LLM Parsing Logic ---
 def parse_query_with_groq(query_text):
@@ -57,7 +53,7 @@ def parse_query_with_groq(query_text):
         response_content = chat_completion.choices[0].message.content
         return json.loads(response_content)
     except Exception as e:
-        print(f"Groq parsing error: {e}")
+        app.logger.error(f"Groq parsing error: {e}")
         return None
 
 
@@ -81,22 +77,22 @@ def calculate_haversine_distance(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
-def find_nearest_metro(venue_lat, venue_lng, metro_stations):
+def find_nearest_metro(venue_lat, venue_lng):
     if not metro_stations: return None, float('inf')
-    return min(
-        ((s['name'], calculate_haversine_distance(venue_lat, venue_lng, s['lat'], s['lng'])) for s in metro_stations),
-        key=lambda x: x[1]
-    )
+    min_dist = float('inf')
+    nearest_station_name = None
+    for station in metro_stations:
+        dist = calculate_haversine_distance(venue_lat, venue_lng, station['lat'], station['lng'])
+        if dist < min_dist:
+            min_dist = dist
+            nearest_station_name = station['name']
+    return nearest_station_name, min_dist
 
 def find_courts_logic(search_date_str, start_time_str, end_time_str, lat=12.9783692, lng=77.6408356, radius=5, sport="SP5", timezone="Asia/Kolkata"):
     """
     This function contains the core logic to find courts.
     It returns a formatted string message with the results.
     """
-    metro_stations = load_metro_stations()
-    if not metro_stations:
-        return "Error: Could not load metro station data."
-
     local_tz = pytz.timezone(timezone)
     
     try:
@@ -107,10 +103,9 @@ def find_courts_logic(search_date_str, start_time_str, end_time_str, lat=12.9783
         return "Invalid time/date format received from parser."
 
     start_datetime_local = local_tz.localize(datetime.datetime.combine(search_date, desired_start))
-    end_datetime_local = local_tz.localize(datetime.datetime.combine(search_date, desired_end))
 
     # Convert the search date to the specific format Playo API expects
-    playo_date_str = start_datetime_local.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    playo_date_str = start_datetime_local.astimezone(pytz.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     payload = {
         "lat": lat, "lng": lng, "cityRadius": radius, "gameTimeActivities": False,
@@ -119,46 +114,71 @@ def find_courts_logic(search_date_str, start_time_str, end_time_str, lat=12.9783
     }
     headers = {"Content-Type": "application/json"}
     
-    logging.warning(f"Sending payload to Playo API: {json.dumps(payload)}")
+    app.logger.warning(f"Sending payload to Playo API: {json.dumps(payload)}")
 
     try:
         response = requests.post("https://api.playo.io/activity-public/list/location", headers=headers, json=payload)
         response.raise_for_status()
         
-        logging.warning(f"Received raw response from Playo API: {response.text}")
+        app.logger.warning(f"Received raw response from Playo API: {response.text}")
         
         data = response.json()
-        activities = data.get("data", [])
+        activities = data.get("data", {}).get("activities", [])
     except (requests.RequestException, json.JSONDecodeError) as e:
-        logging.error(f"Error communicating with Playo API: {e}")
+        app.logger.error(f"Error communicating with Playo API: {e}")
         return "Sorry, there was an error contacting the Playo API."
 
     grouped_venues = {}
     for activity in activities:
         if not isinstance(activity, dict): continue
+        activity_id = activity.get('id', 'N/A')
+        
+        # --- FILTERING LOGIC WITH DEBUGGING ---
+        if not activity.get("lat") or not activity.get("lng"):
+            app.logger.warning(f"Skipping {activity_id}: Missing lat/lng.")
+            continue
+
+        if activity.get("type") != 0 or activity.get("joineeCount", 0) > 1:
+            app.logger.warning(f"Skipping {activity_id}: type={activity.get('type')}, joinees={activity.get('joineeCount', 0)}.")
+            continue
         
         try:
             start_time_utc = parser.isoparse(activity["startTime"])
             start_time_local = start_time_utc.astimezone(local_tz)
 
-            if not (start_datetime_local <= start_time_local and start_time_local.time() <= desired_end):
+            if not (desired_start <= start_time_local.time() <= desired_end):
+                app.logger.warning(f"Skipping {activity_id}: Time {start_time_local.time()} is outside window {desired_start}-{desired_end}.")
                 continue
             
-            venue_id = activity.get("venueId")
-            grouping_key = (venue_id, activity.get("startTime"), activity.get("endTime"))
+            app.logger.info(f"Activity {activity_id} passed filters, processing.")
+            
+            # Handle API inconsistency for venueId
+            venue_id = activity.get("venueId") or activity.get("venueId d")
+            if not venue_id:
+                app.logger.error(f"Could not find venueId for activity {activity_id}")
+                continue
 
+            venue_lat = float(activity["lat"])
+            venue_lng = float(activity["lng"])
+            
+            nearest_metro, dist_to_metro = find_nearest_metro(venue_lat, venue_lng)
+            
+            grouping_key = (venue_id, start_time_local.strftime('%H:%M'))
+            
             if grouping_key not in grouped_venues:
-                nearest_metro, dist_to_metro = find_nearest_metro(activity.get("lat"), activity.get("lng"), metro_stations)
                 grouped_venues[grouping_key] = {
-                    "venue_name": activity.get("venueName", "N/A"),
-                    "start": start_time_local.strftime("%I:%M %p"),
-                    "end": parser.isoparse(activity.get("endTime")).astimezone(local_tz).strftime("%I:%M %p"),
+                    "venue_name": activity["venueName"],
+                    "start_time": start_time_local.strftime('%I:%M %p'),
+                    "location": activity.get("location", "N/A"),
+                    "maps_link": f"https://www.google.com/maps/search/?api=1&query={venue_lat},{venue_lng}",
                     "venue_id": venue_id, "nearest_metro": nearest_metro, "distance_to_metro": dist_to_metro, "court_count": 0
                 }
             grouped_venues[grouping_key]["court_count"] += 1
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, TypeError) as e:
+            app.logger.error(f"Error processing activity {activity_id}: {e}", exc_info=True)
             continue
             
+    app.logger.warning(f"Found grouped venues: {json.dumps({str(k): v for k, v in grouped_venues.items()}, indent=2)}")
     matching_venues = sorted(grouped_venues.values(), key=lambda x: x['distance_to_metro'])
 
     if not matching_venues:
@@ -167,7 +187,7 @@ def find_courts_logic(search_date_str, start_time_str, end_time_str, lat=12.9783
     message = f"🏸 *Available Courts ({search_date_str}, {start_time_str} - {end_time_str})*\n\n"
     for i, venue in enumerate(matching_venues[:10], 1): # Limit to top 10 results
         message += f"*{i}. {venue['venue_name']}*\n"
-        message += f"⏰ {venue['start']} - {venue['end']}\n"
+        message += f"⏰ {venue['start_time']}\n"
         message += f"🏟️ Courts: {venue['court_count']}\n"
         message += f"🚇 {venue['nearest_metro']} ({venue['distance_to_metro']:.2f} km away)\n"
         message += f"🔗 [Book on Playo](https://playo.co/venue/{venue['venue_id']})\n\n"
@@ -175,6 +195,7 @@ def find_courts_logic(search_date_str, start_time_str, end_time_str, lat=12.9783
     return message
 
 # --- Flask Web Application ---
+metro_stations = load_metro_stations()
 
 # A simple health check route
 @app.route('/')
@@ -210,13 +231,14 @@ def telegram_webhook():
         else:
             reply_text = "Sorry, I didn't understand that. Use `/start` for help."
 
+        app.logger.info(f"Generated reply: {reply_text}")
         async def _send_message_async():
             await bot.send_message(chat_id=chat_id, text=reply_text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
         
         asyncio.run(_send_message_async())
 
     except Exception as e:
-        print(f"Error handling update: {e}")
+        app.logger.error(f"Error handling update: {e}")
         
     return 'ok'
 
