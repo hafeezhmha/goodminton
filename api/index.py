@@ -172,7 +172,7 @@ def home():
     return "Bot is alive!"
 
 @app.route('/api/telegram', methods=['POST'])
-def telegram_webhook():
+async def telegram_webhook():
     try:
         token = os.environ.get("TELEGRAM_BOT_TOKEN")
         bot = Bot(token=token)
@@ -200,7 +200,7 @@ def telegram_webhook():
         else:
             reply_text = "Sorry, I didn't understand that. Use `/start` for help."
 
-        bot.send_message(chat_id=chat_id, text=reply_text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+        await bot.send_message(chat_id=chat_id, text=reply_text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
 
     except Exception as e:
         # Avoid crashing the whole server on a single error
@@ -210,13 +210,11 @@ def telegram_webhook():
 
 # A manual setup route for convenience during development
 @app.route('/set_webhook', methods=['GET'])
-def set_webhook():
+async def set_webhook():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         return "TELEGRAM_BOT_TOKEN environment variable not set!", 400
         
-    # The public URL of your Vercel deployment
-    # You MUST set this as an environment variable in Vercel
     host = os.environ.get("VERCEL_URL")
     if not host:
         return "VERCEL_URL environment variable not set!", 400
@@ -225,9 +223,9 @@ def set_webhook():
     webhook_url = f"https://{host}/api/telegram"
     
     try:
-        webhook_info = bot.get_webhook_info()
+        webhook_info = await bot.get_webhook_info()
         if webhook_info.url != webhook_url:
-            bot.set_webhook(webhook_url)
+            await bot.set_webhook(webhook_url)
             return f"Webhook set to {webhook_url}", 200
         else:
             return f"Webhook is already set to {webhook_url}", 200
