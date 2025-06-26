@@ -1,0 +1,80 @@
+name: Badminton Game Checker Base
+on:
+  schedule:
+    # Run Monday to Friday at 12:00 PM IST (6:30 AM UTC)
+    - cron: "30 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      latitude:
+        description: 'Latitude for search'
+        required: true
+        default: '12.9783692'
+      longitude:
+        description: 'Longitude for search'
+        required: true
+        default: '77.6408356'
+      radius:
+        description: 'City radius in km'
+        required: true
+        default: '5'
+      sport_id:
+        description: 'Sport ID'
+        required: true
+        default: 'SP5' # Badminton
+      timezone:
+        description: 'Timezone'
+        required: true
+        default: 'Asia/Kolkata'
+      start_time:
+        description: 'Start time (HH:MM)'
+        required: true
+        default: '19:00'
+      end_time:
+        description: 'End time (HH:MM)'
+        required: true
+        default: '20:00'
+
+jobs:
+  check-games:
+    runs-on: ubuntu-latest
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      LATITUDE: ${{ inputs.latitude || '12.9783692' }}
+      LONGITUDE: ${{ inputs.longitude || '77.6408356' }}
+      RADIUS: ${{ inputs.radius || '5' }}
+      SPORT_ID: ${{ inputs.sport_id || 'SP5' }}
+      TIMEZONE: ${{ inputs.timezone || 'Asia/Kolkata' }}
+      START_TIME: ${{ inputs.start_time || '19:00' }}
+      END_TIME: ${{ inputs.end_time || '20:00' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Run game check
+        run: |
+          echo "Checking for games from $START_TIME to $END_TIME"
+          uv run finder.py \
+            --lat "$LATITUDE" \
+            --lng "$LONGITUDE" \
+            --radius "$RADIUS" \
+            --sport "$SPORT_ID" \
+            --timezone "$TIMEZONE" \
+            --start-time "$START_TIME" \
+            --end-time "$END_TIME" \
+            --telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }} 

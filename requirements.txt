@@ -1,0 +1,6 @@
+click
+requests
+pytz
+rich
+python-dateutil
+python-telegram-bot 
