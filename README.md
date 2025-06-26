@@ -22,7 +22,7 @@ Goodminton has been re-architected into an intelligent web application:
 
 1.  **Vercel Hosting**: The project runs as a Python serverless function hosted on Vercel.
 2.  **Flask Web Server**: A lightweight Flask app listens for incoming messages from Telegram via a webhook.
-3.  **Location Storage**: The bot saves your preferred search location in a simple `user_locations.json` file, associating your Telegram chat ID with a latitude and longitude.
+3.  **Location Storage**: To persist user locations across sessions in a serverless environment, the bot uses **Vercel Blob Storage**. It reads and writes a single `user_locations.json` file in the cloud, associating your Telegram chat ID with a latitude and longitude. This solves the "read-only filesystem" issue common in serverless platforms.
 4.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The `llama3-70b-8192` model parses your text and converts it into structured data (date, start time, end time).
 5.  **Unofficial Playo API**: The bot queries an unofficial, public Playo API endpoint (`/activity-public/list/location`) that lists all public "activities". It uses your saved location for the search, or a default location if one hasn't been set.
 6.  **Intelligent Filtering**: Since there is no official API for booking slots, the bot uses a custom filtering logic to sift through the activities. It identifies listings that are actually bookable court slots by filtering for activities that have a low number of participants (`joineeCount <= 1`) and are not skill-based games (`type: 0`).
@@ -43,15 +43,21 @@ Deploying your own instance of Goodminton is fast and free.
     - Go to [console.groq.com/keys](https://console.groq.com/keys) and sign up for a free account.
     - Create and copy a new **API Key**.
 
-### Step 2: Deploy to Vercel
+### Step 2: Deploy to Vercel & Create Storage
 
 1.  **Sign up:** Go to [vercel.com](https://vercel.com) and create an account by signing up with your GitHub profile.
-2.  **Create a New Project:** On your Vercel dashboard, click "Add New..." -> "Project".
-3.  **Import Your Repository:** Select your forked `goodminton` repository and click **Import**.
-4.  **Configure Environment Variables:** Before deploying, expand the **Environment Variables** section and add the following two secrets:
+2.  **Create a Blob Store:**
+    - On your Vercel dashboard, go to the **Storage** tab.
+    - Click **Create Database** and select **Blob**.
+    - Link it to your project when prompted.
+    - Go into your new Blob store's settings and generate a **Read-Write Token**. Copy this token.
+3.  **Create a New Project:** On your Vercel dashboard, click "Add New..." -> "Project".
+4.  **Import Your Repository:** Select your forked `goodminton` repository and click **Import**.
+5.  **Configure Environment Variables:** Before deploying, expand the **Environment Variables** section and add the following three secrets:
     - **Name**: `TELEGRAM_BOT_TOKEN`, **Value**: *Your token from `@BotFather`*.
     - **Name**: `GROQ_API_KEY`, **Value**: *Your key from Groq*.
-5.  **Deploy:** Click the **Deploy** button. Vercel will build and deploy your application, which might take a few minutes.
+    - **Name**: `BLOB_READ_WRITE_TOKEN`, **Value**: *Your new Blob store token*.
+6.  **Deploy:** Click the **Deploy** button. Vercel will build and deploy your application, which might take a few minutes.
 
 ### Step 3: Set the Telegram Webhook
 
@@ -95,11 +101,13 @@ Go to your Telegram chat with the bot and send commands.
         ```bash
         export TELEGRAM_BOT_TOKEN="your-telegram-token"
         export GROQ_API_KEY="your-groq-key"
+        export BLOB_READ_WRITE_TOKEN="your-vercel-blob-token"
         ```
     -   **On Windows Command Prompt**:
         ```cmd
         set TELEGRAM_BOT_TOKEN="your-telegram-token"
         set GROQ_API_KEY="your-groq-key"
+        set BLOB_READ_WRITE_TOKEN="your-vercel-blob-token"
         ```
 5.  **Run the local Flask server**:
     Open a terminal and run the following command. This makes the server accessible from your local network (and from WSL).
