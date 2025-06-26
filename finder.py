@@ -152,6 +152,12 @@ def find_games(lat, lng, radius, sport, start_time, end_time, timezone, verbose,
             console.print(f"[dim]Desired time window ({timezone}): {start_datetime_local.strftime('%H:%M:%S')} to {end_datetime_local.strftime('%H:%M:%S')}[/dim]")
 
         for activity in activities:
+            # Add a check to ensure the item is a dictionary before processing
+            if not isinstance(activity, dict):
+                if verbose:
+                    console.print(f"[dim]Skipping non-dict item in API response: {activity}[/dim]")
+                continue
+                
             # Parse game's start and end time (assuming UTC from API)
             try:
                 start_time_utc = parser.isoparse(activity["startTime"])
