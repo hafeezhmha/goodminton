@@ -4,7 +4,7 @@
 
 Powered by [Groq](https://groq.com/) for natural language understanding, you can chat with it conversationally to find courts on specific dates and times. The bot prioritizes venues near Bangalore's Namma Metro stations, making it the perfect tool for planning your next game.
 
-![Goodminton Bot Demo](./demo.jpeg)
+![Goodminton Bot Demo](assets/demo.jpeg)
 
 
 ## Features
