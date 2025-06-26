@@ -78,13 +78,13 @@ You should see a message confirming the webhook was set. Your bot is now live!
 
 ## Usage
 
-Go to your Telegram chat with the bot and send commands.
-
--   `/start` - Shows the welcome message.
--   `/setlocation` - Prompts you to share your location to save it for future searches.
--   `/find courts tomorrow from 8pm to 10pm`
--   `/find next wednesday 6 to 8 pm`
--   `/find courts on july 25th between 19:00 and 21:00`
+- Start a chat with your bot on Telegram.
+- Use the `/start` command to see the welcome message.
+- Use `/find <query>` to search for courts. For example:
+  - `/find courts tomorrow evening`
+  - `/find courts on July 20th from 5pm to 8pm`
+- Use `/setlocation` to set your location. The bot will then prioritize venues closest to you in the search results.
+- The bot will reply with a list of available courts.
 
 ## Customization & Local Development
 
