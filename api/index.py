@@ -4,6 +4,7 @@ import datetime
 import pytz
 import requests
 import asyncio
+import logging
 from flask import Flask, request
 from telegram import Bot, Update
 from telegram.constants import ParseMode
@@ -12,6 +13,9 @@ from math import sin, cos, sqrt, atan2, radians
 from groq import Groq
 
 app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # --- Groq LLM Parsing Logic ---
 def parse_query_with_groq(query_text):
@@ -115,18 +119,18 @@ def find_courts_logic(search_date_str, start_time_str, end_time_str, lat=12.9783
     }
     headers = {"Content-Type": "application/json"}
     
-    print(f"Sending payload to Playo API: {json.dumps(payload)}")
+    logging.warning(f"Sending payload to Playo API: {json.dumps(payload)}")
 
     try:
         response = requests.post("https://api.playo.io/activity-public/list/location", headers=headers, json=payload)
         response.raise_for_status()
         
-        print(f"Received raw response from Playo API: {response.text}")
+        logging.warning(f"Received raw response from Playo API: {response.text}")
         
         data = response.json()
         activities = data.get("data", [])
     except (requests.RequestException, json.JSONDecodeError) as e:
-        print(f"Error communicating with Playo API: {e}")
+        logging.error(f"Error communicating with Playo API: {e}")
         return "Sorry, there was an error contacting the Playo API."
 
     grouped_venues = {}
