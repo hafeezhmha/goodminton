@@ -3,6 +3,7 @@ import json
 import datetime
 import pytz
 import requests
+import asyncio
 from flask import Flask, request
 from telegram import Bot, Update
 from telegram.constants import ParseMode
@@ -172,7 +173,7 @@ def home():
     return "Bot is alive!"
 
 @app.route('/api/telegram', methods=['POST'])
-async def telegram_webhook():
+def telegram_webhook():
     try:
         token = os.environ.get("TELEGRAM_BOT_TOKEN")
         bot = Bot(token=token)
@@ -200,34 +201,43 @@ async def telegram_webhook():
         else:
             reply_text = "Sorry, I didn't understand that. Use `/start` for help."
 
-        await bot.send_message(chat_id=chat_id, text=reply_text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+        async def _send_message_async():
+            await bot.send_message(chat_id=chat_id, text=reply_text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+        
+        asyncio.run(_send_message_async())
 
     except Exception as e:
-        # Avoid crashing the whole server on a single error
         print(f"Error handling update: {e}")
         
     return 'ok'
 
 # A manual setup route for convenience during development
 @app.route('/set_webhook', methods=['GET'])
-async def set_webhook():
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    if not token:
-        return "TELEGRAM_BOT_TOKEN environment variable not set!", 400
-        
-    host = os.environ.get("VERCEL_URL")
-    if not host:
-        return "VERCEL_URL environment variable not set!", 400
+def set_webhook():
+    async def _async_set_webhook():
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        if not token:
+            return "TELEGRAM_BOT_TOKEN environment variable not set!", 400
+            
+        host = os.environ.get("VERCEL_URL")
+        if not host:
+            return "VERCEL_URL environment variable not set!", 400
 
-    bot = Bot(token=token)
-    webhook_url = f"https://{host}/api/telegram"
-    
+        bot = Bot(token=token)
+        webhook_url = f"https://{host}/api/telegram"
+        
+        try:
+            webhook_info = await bot.get_webhook_info()
+            if webhook_info.url != webhook_url:
+                await bot.set_webhook(webhook_url)
+                return f"Webhook set to {webhook_url}", 200
+            else:
+                return f"Webhook is already set to {webhook_url}", 200
+        except Exception as e:
+            return str(e), 500
+
     try:
-        webhook_info = await bot.get_webhook_info()
-        if webhook_info.url != webhook_url:
-            await bot.set_webhook(webhook_url)
-            return f"Webhook set to {webhook_url}", 200
-        else:
-            return f"Webhook is already set to {webhook_url}", 200
+        return asyncio.run(_async_set_webhook())
     except Exception as e:
-        return str(e), 500 
+        # This catches potential runtime errors with asyncio itself
+        return f"Error running async setup: {str(e)}", 500 
