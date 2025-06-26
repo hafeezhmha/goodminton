@@ -4,12 +4,13 @@
 
 Powered by [Groq](https://groq.com/) for natural language understanding, you can chat with it conversationally to find courts on specific dates and times. The bot prioritizes venues near Bangalore's Namma Metro stations, making it the perfect tool for planning your next game.
 
-![WhatsApp-Image-2024-05-15-at-12-09-17-PM](https://github.com/user-attachments/assets/b83a67d5-83c3-42e7-a9a7-951c277b73c8)
+![Goodminton Bot Demo](./demo.jpeg)
 
 
 ## Features
 
-- **Natural Language Processing**: Simply ask for what you want in plain English (e.g., "courts tomorrow from 8 to 10 pm"). The bot uses Groq's Llama 3 to understand you.
+- **Natural Language Processing**: Simply ask for what you want in plain English (e.g., "courts tomorrow from 8 to 10 pm").
+- **Personalized Location Search**: Set your home or office location once, and the bot will always search for courts nearby.
 - **Interactive Chat**: No more rigid commands. Have a conversation directly with your bot in Telegram.
 - **Metro Proximity Prioritization**: Automatically finds the nearest Namma Metro station for each venue and sorts the results accordingly.
 - **Court Availability Count**: See exactly how many courts are available at a venue for a given time slot, perfect for group bookings.
@@ -21,10 +22,11 @@ Goodminton has been re-architected into an intelligent web application:
 
 1.  **Vercel Hosting**: The project runs as a Python serverless function hosted on Vercel.
 2.  **Flask Web Server**: A lightweight Flask app listens for incoming messages from Telegram via a webhook.
-3.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The `llama3-70b-8192` model parses your text and converts it into structured data (date, start time, end time).
-4.  **Unofficial Playo API**: The bot queries an unofficial, public Playo API endpoint (`/activity-public/list/location`) that lists all public "activities".
-5.  **Intelligent Filtering**: Since there is no official API for booking slots, the bot uses a custom filtering logic to sift through the activities. It identifies listings that are actually bookable court slots by filtering for activities that have a low number of participants (`joineeCount <= 1`) and are not skill-based games (`type: 0`).
-6.  **Telegram Bot**: The final, formatted, and sorted list of courts is sent back to you in your Telegram chat.
+3.  **Location Storage**: The bot saves your preferred search location in a simple `user_locations.json` file, associating your Telegram chat ID with a latitude and longitude.
+4.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The `llama3-70b-8192` model parses your text and converts it into structured data (date, start time, end time).
+5.  **Unofficial Playo API**: The bot queries an unofficial, public Playo API endpoint (`/activity-public/list/location`) that lists all public "activities". It uses your saved location for the search, or a default location if one hasn't been set.
+6.  **Intelligent Filtering**: Since there is no official API for booking slots, the bot uses a custom filtering logic to sift through the activities. It identifies listings that are actually bookable court slots by filtering for activities that have a low number of participants (`joineeCount <= 1`) and are not skill-based games (`type: 0`).
+7.  **Telegram Bot**: The final, formatted, and sorted list of courts is sent back to you in your Telegram chat.
 
 ## Setup Instructions
 
@@ -63,9 +65,10 @@ You should see a message confirming the webhook was set. Your bot is now live!
 
 ## Usage
 
-Go to your Telegram chat with the bot and send commands. The bot is smart, so you can be creative!
+Go to your Telegram chat with the bot and send commands.
 
 -   `/start` - Shows the welcome message.
+-   `/setlocation` - Prompts you to share your location to save it for future searches.
 -   `/find courts tomorrow from 8pm to 10pm`
 -   `/find next wednesday 6 to 8 pm`
 -   `/find courts on july 25th between 19:00 and 21:00`
