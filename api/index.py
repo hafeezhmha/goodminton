@@ -27,7 +27,7 @@ def parse_query_with_groq(query_text):
         - If the user does not specify a date, assume they mean today.
         - Convert all times to 24-hour HH:MM format.
         - Return the date in YYYY-MM-DD format.
-        - Respond ONLY with a valid JSON object. Do not add any other text or explanations.
+        - Your response MUST be ONLY a valid JSON object. Do not add any other text, commentary, or markdown formatting like ```json.
         
         Example 1:
         User query: "10pm to 11pm on wednesday"
@@ -49,7 +49,6 @@ def parse_query_with_groq(query_text):
             ],
             model="llama-3.1-70b-versatile",
             temperature=0.0,
-            response_format={"type": "json_object"},
         )
         response_content = chat_completion.choices[0].message.content
         return json.loads(response_content)
