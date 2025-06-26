@@ -7,11 +7,35 @@ import asyncio
 from flask import Flask, request
 from telegram import Bot, Update
 from telegram.constants import ParseMode
+from telegram import ReplyKeyboardMarkup, KeyboardButton
 from dateutil import parser
 from math import sin, cos, sqrt, atan2, radians
 from groq import Groq
 
 app = Flask(__name__)
+
+# --- Location Storage ---
+LOCATIONS_FILE = 'user_locations.json'
+
+def get_user_locations():
+    """Reads all user locations from the file."""
+    try:
+        with open(LOCATIONS_FILE, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_user_location(chat_id, lat, lng):
+    """Saves a single user's location."""
+    locations = get_user_locations()
+    locations[str(chat_id)] = {"lat": lat, "lng": lng}
+    with open(LOCATIONS_FILE, 'w') as f:
+        json.dump(locations, f, indent=4)
+
+def get_user_location(chat_id):
+    """Retrieves a single user's location."""
+    locations = get_user_locations()
+    return locations.get(str(chat_id))
 
 # --- Groq LLM Parsing Logic ---
 def parse_query_with_groq(query_text):
@@ -209,11 +233,36 @@ def telegram_webhook():
         bot = Bot(token=token)
         update = Update.de_json(request.get_json(force=True), bot)
         
+        if not update.message:
+            return 'ok'
+
         chat_id = update.message.chat_id
-        text = update.message.text.strip()
+        text = update.message.text
+        location = update.message.location
+
+        # Handle incoming location messages
+        if location:
+            save_user_location(chat_id, location.latitude, location.longitude)
+            async def _send_confirmation():
+                await bot.send_message(chat_id=chat_id, text="✅ Your location has been saved!")
+            asyncio.run(_send_confirmation())
+            return 'ok'
+
+        if not text:
+            return 'ok'
+        
+        text = text.strip()
 
         if text.startswith("/start"):
-            reply_text = "Welcome! Find courts with:\n`/find <query>`\n(e.g., `/find courts from 8pm to 10pm tomorrow`)"
+            reply_text = "Welcome! Find courts with:\n`/find <query>`\n\nOr set your search location:\n`/setlocation`"
+        elif text.startswith("/setlocation"):
+            async def _send_location_request():
+                location_keyboard = KeyboardButton(text="📍 Share My Location", request_location=True)
+                custom_keyboard = [[location_keyboard]]
+                reply_markup = ReplyKeyboardMarkup(custom_keyboard, resize_keyboard=True, one_time_keyboard=True)
+                await bot.send_message(chat_id=chat_id, text="Please tap the button below to share your location for future searches.", reply_markup=reply_markup)
+            asyncio.run(_send_location_request())
+            return 'ok' # We don't send a text reply, just the keyboard
         elif text.startswith("/find"):
             query = text.replace("/find", "").strip()
             if not query:
@@ -221,10 +270,22 @@ def telegram_webhook():
             else:
                 parsed_data = parse_query_with_groq(query)
                 if parsed_data and "start_time" in parsed_data and "end_time" in parsed_data and "date" in parsed_data:
+                    
+                    user_location = get_user_location(chat_id)
+                    search_lat = 12.9783692 # Default lat
+                    search_lng = 77.6408356 # Default lng
+
+                    if user_location:
+                        search_lat = user_location['lat']
+                        search_lng = user_location['lng']
+                        app.logger.info(f"Using saved location for chat {chat_id}")
+
                     reply_text = find_courts_logic(
                         search_date_str=parsed_data["date"],
                         start_time_str=parsed_data["start_time"],
-                        end_time_str=parsed_data["end_time"]
+                        end_time_str=parsed_data["end_time"],
+                        lat=search_lat,
+                        lng=search_lng
                     )
                 else:
                     reply_text = "Sorry, I couldn't understand the date and time from your query. Please be more specific."

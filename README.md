@@ -9,7 +9,7 @@ Powered by [Groq](https://groq.com/) for natural language understanding, you can
 
 ## Features
 
-- **Natural Language Processing**: Simply ask for what you want in plain English (e.g., "courts tomorrow from 8 to 10 pm"). The bot uses Groq's Llama 3.1 to understand you.
+- **Natural Language Processing**: Simply ask for what you want in plain English (e.g., "courts tomorrow from 8 to 10 pm"). The bot uses Groq's Llama 3 to understand you.
 - **Interactive Chat**: No more rigid commands. Have a conversation directly with your bot in Telegram.
 - **Metro Proximity Prioritization**: Automatically finds the nearest Namma Metro station for each venue and sorts the results accordingly.
 - **Court Availability Count**: See exactly how many courts are available at a venue for a given time slot, perfect for group bookings.
@@ -21,9 +21,10 @@ Goodminton has been re-architected into an intelligent web application:
 
 1.  **Vercel Hosting**: The project runs as a Python serverless function hosted on Vercel.
 2.  **Flask Web Server**: A lightweight Flask app listens for incoming messages from Telegram via a webhook.
-3.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The Llama 3 70b model (`llama3-70b-8192`) parses your text and converts it into structured data (date, start time, end time).
-4.  **Playo API**: The bot uses this structured data to query Playo's public API for available court booking slots.
-5.  **Telegram Bot**: The final, formatted, and sorted list of courts is sent back to you in your Telegram chat.
+3.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The `llama3-70b-8192` model parses your text and converts it into structured data (date, start time, end time).
+4.  **Unofficial Playo API**: The bot queries an unofficial, public Playo API endpoint (`/activity-public/list/location`) that lists all public "activities".
+5.  **Intelligent Filtering**: Since there is no official API for booking slots, the bot uses a custom filtering logic to sift through the activities. It identifies listings that are actually bookable court slots by filtering for activities that have a low number of participants (`joineeCount <= 1`) and are not skill-based games (`type: 0`).
+6.  **Telegram Bot**: The final, formatted, and sorted list of courts is sent back to you in your Telegram chat.
 
 ## Setup Instructions
 
@@ -80,19 +81,31 @@ Go to your Telegram chat with the bot and send commands. The bot is smart, so yo
     ```bash
     python -m venv venv
     source venv/bin/activate
+    # On Windows cmd, use `venv\Scripts\activate`
     ```
 3.  **Install dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Create a `.env` file** in the root directory for your local secrets:
-    ```
-    TELEGRAM_BOT_TOKEN="your-telegram-token"
-    GROQ_API_KEY="your-groq-key"
-    ```
+4.  **Set Environment Variables**:
+    -   **On Linux/macOS/WSL**:
+        ```bash
+        export TELEGRAM_BOT_TOKEN="your-telegram-token"
+        export GROQ_API_KEY="your-groq-key"
+        ```
+    -   **On Windows Command Prompt**:
+        ```cmd
+        set TELEGRAM_BOT_TOKEN="your-telegram-token"
+        set GROQ_API_KEY="your-groq-key"
+        ```
 5.  **Run the local Flask server**:
-    The `python-dotenv` package (installed with Flask) will automatically load your `.env` file.
+    Open a terminal and run the following command. This makes the server accessible from your local network (and from WSL).
     ```bash
-    flask --app api/index:app run
+    flask run --host=0.0.0.0
     ```
-    This will start a local server, but it won't be able to receive messages from Telegram without a public URL and a tool like `ngrok`. The primary development workflow is to deploy directly to Vercel. 
+6.  **Test with `curl`**:
+    Open a **second terminal** (a WSL terminal if your server is running on Windows) and use `curl` to send a test message. Replace the IP with your machine's local IP if needed.
+    ```bash
+    curl -X POST http://127.0.0.1:5000/api/telegram -H "Content-Type: application/json" -d '{"update_id":12345,"message":{"message_id":54321,"date":1625987654,"chat":{"id":98765,"type":"private"},"text":"/find courts for tomorrow evening"}}'
+    ```
+    Check the terminal where Flask is running to see the detailed log output. 
