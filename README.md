@@ -21,7 +21,7 @@ Goodminton has been re-architected into an intelligent web application:
 
 1.  **Vercel Hosting**: The project runs as a Python serverless function hosted on Vercel.
 2.  **Flask Web Server**: A lightweight Flask app listens for incoming messages from Telegram via a webhook.
-3.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The Llama 3.1 model parses your text and converts it into structured data (date, start time, end time).
+3.  **Groq LLM Parser**: When you send a `/find` command, the query is first sent to the Groq API. The Llama 3 70b model (`llama3-70b-8192`) parses your text and converts it into structured data (date, start time, end time).
 4.  **Playo API**: The bot uses this structured data to query Playo's public API for available court booking slots.
 5.  **Telegram Bot**: The final, formatted, and sorted list of courts is sent back to you in your Telegram chat.
 

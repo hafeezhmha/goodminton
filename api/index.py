@@ -47,7 +47,7 @@ def parse_query_with_groq(query_text):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query_text}
             ],
-            model="llama-3.1-70b-versatile",
+            model="llama3-70b-8192",
             temperature=0.0,
         )
         response_content = chat_completion.choices[0].message.content
